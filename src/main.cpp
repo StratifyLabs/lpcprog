@@ -8,13 +8,13 @@
 #include <stfy/sys.hpp>
 #include <stfy/isp.hpp>
 
-
 static void show_usage(const char * name);
 static bool update_progress(void * context, int progress, int max);
 
 int main(int argc, char * argv[]){
 	String image;
 	String arg;
+	String device;
 
 	int i;
 	int ret;
@@ -43,7 +43,6 @@ int main(int argc, char * argv[]){
 				if( token.size() > 0 ){ uart_port = atoi( token.at(0) ); }
 				if( token.size() > 1 ){ uart_pinassign = atoi( token.at(1) ); }
 			}
-
 		}
 
 		if( (arg == "-r") ){
@@ -78,6 +77,12 @@ int main(int argc, char * argv[]){
 				image = argv[i+1];
 			}
 		}
+
+		if( (arg == "-d") ){
+			if( argc > i+1 ){
+				device = argv[i+1];
+			}
+		}
 	}
 
 	if( image.empty() ){
@@ -86,7 +91,6 @@ int main(int argc, char * argv[]){
 
 
 	printf("Program %s\n", image.c_str());
-
 	printf("Uart:%d,%d Reset:%d.%d Ispreq:%d.%d\n",
 			uart_port, uart_pinassign, reset_port, reset_pin, ispreq_port, ispreq_pin);
 
@@ -103,7 +107,7 @@ int main(int argc, char * argv[]){
 	}
 
 	printf("Start programming\n");
-	ret = isp.program(image, 12000000, "lpc824", update_progress);
+	ret = isp.program(image, 12000000, device, update_progress);
 	if( ret < 0 ){
 		printf("Failed to program chip %d\n", ret);
 	}
