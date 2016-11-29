@@ -1,0 +1,15 @@
+{
+    "AppBuild": "build_release_armv7em_fpu",
+    "AppBuildPrefix": "build_",
+    "AppGithub": "https://github.com/StratifyLabs/lpcprog",
+    "AppInstallPath": "/app/.install",
+    "AppProject": "lpcprog",
+    "AppProjectId": "",
+    "AppProjectVersion": "0.1",
+    "AppRamSize": 16384,
+    "IsAppInstallAll": false,
+    "IsAppInstallFiles": false,
+    "IsAppRam": false,
+    "IsAppStartup": false,
+    "type": "StratifyApp"
+}
