@@ -10,7 +10,7 @@
     "hardwareid": "",
     "name": "lpcprog",
     "publisher": "Stratify Labs, Inc",
-    "ram": 32768,
+    "ram": 8192,
     "tags": "utility",
     "type": "StratifyApp",
     "version": "0.9"

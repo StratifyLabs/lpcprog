@@ -26,7 +26,7 @@
 					<stringMacro name="BUILD_NAME" type="VALUE_TEXT" value="Unused"/>
 					<stringMacro name="BUILD_FLOAT" type="VALUE_TEXT" value="."/>
 					<stringMacro name="BUILD_ARCH" type="VALUE_TEXT" value="armv7-m"/>
-					<stringMacro name="RAM_SIZE" type="VALUE_TEXT" value="4096"/>
+					<stringMacro name="RAM_SIZE" type="VALUE_TEXT" value="8192"/>
 				</macros>
 				<externalSettings/>
 				<extensions>
