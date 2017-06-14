@@ -6,116 +6,112 @@
 #include <stfy/hal.hpp>
 #include <stfy/var.hpp>
 #include <stfy/sys.hpp>
-#include <stfy/isp.hpp>
+#include "LpcIsp.hpp"
+
 
 static void show_usage(const char * name);
 static bool update_progress(void * context, int progress, int max);
 
 int main(int argc, char * argv[]){
 	String image;
-	String arg;
 	String device;
+	pio_t uart_pio;
+	pio_t reset_pio;
+	pio_t ispreq_pio;
 
-	int i;
+	Cli cli(argc, argv);
+
+	cli.set_version("1.3");
+
+	if( cli.is_option("-v") ){
+		cli.print_version();
+		exit(1);
+	}
+
 	int ret;
 
-	//set default values
-	int uart_port = 0;
-	int uart_pinassign = 0;
-	int reset_port = 1;
-	int reset_pin = 0;
-	int ispreq_port = 2;
-	int ispreq_pin = 10;
-	int led_port = -1;
-	int led_pin = 0;
-
 	image.clear();
+	device.clear();
 
-	//parse the arguments
-	for(i=1; i < argc; i++){
-		Token token;
-		arg = argv[i];
-
-		if( (arg == "-u") ){
-			if( argc > i+1 ){
-				token.assign(argv[i+1]);
-				token.parse(".");
-				if( token.size() > 0 ){ uart_port = atoi( token.at(0) ); }
-				if( token.size() > 1 ){ uart_pinassign = atoi( token.at(1) ); }
-			}
-		}
-
-		if( (arg == "-r") ){
-			if( argc > i+1 ){
-				token.assign(argv[i+1]);
-				token.parse(".");
-				if( token.size() > 0 ){ reset_port = atoi( token.at(0) ); }
-				if( token.size() > 1 ){ reset_pin = atoi( token.at(1) ); }
-			}
-		}
-
-		if( (arg == "-i") ){
-			if( argc > i+1 ){
-				token.assign(argv[i+1]);
-				token.parse(".");
-				if( token.size() > 0 ){ ispreq_port = atoi( token.at(0) ); }
-				if( token.size() > 1 ){ ispreq_pin = atoi( token.at(1) ); }
-			}
-		}
-
-		if( (arg == "-led") ){
-			if( argc > i+1 ){
-				token.assign(argv[i+1]);
-				token.parse(".");
-				if( token.size() > 0 ){ led_port = atoi( token.at(0) ); }
-				if( token.size() > 1 ){ led_pin = atoi( token.at(1) ); }
-			}
-		}
-
-		if( (arg == "-in") ){
-			if( argc > i+1 ){
-				image = argv[i+1];
-			}
-		}
-
-		if( (arg == "-d") ){
-			if( argc > i+1 ){
-				device = argv[i+1];
-			}
-		}
+	uart_pio.port = 0;
+	uart_pio.pin = 0;
+	if( cli.is_option("-u") ){
+		uart_pio = cli.get_option_pio("-u");
 	}
 
-	if( image.empty() ){
+
+	if( cli.is_option("-r") ){
+		reset_pio = cli.get_option_pio("-r");
+	} else {
+		reset_pio.port = 1;
+		reset_pio.pin = 0;
+	}
+
+
+	if( cli.is_option("-i") ){
+		ispreq_pio = cli.get_option_pio("-i");
+	} else {
+		ispreq_pio.port = 2;
+		ispreq_pio.pin = 10;
+	}
+
+
+	if( cli.is_option("-in") ){
+		image = cli.get_option_argument("-in");
+
+	} else {
 		show_usage(argv[0]);
+		exit(1);
+	}
+
+	if( cli.is_option("-d") ){
+		device = cli.get_option_argument("-d");
+	} else {
+		show_usage(argv[0]);
+		exit(1);
 	}
 
 
-	printf("Program %s\n", image.c_str());
-	printf("Uart:%d,%d Reset:%d.%d Ispreq:%d.%d\n",
-			uart_port, uart_pinassign, reset_port, reset_pin, ispreq_port, ispreq_pin);
+	printf("Device %s\n", device.c_str());
+	printf("Image %s\n", image.c_str());
+	printf("Uart:%d.%d Reset:%d.%d Ispreq:%d.%d\n",
+			uart_pio.port, uart_pio.pin,
+			reset_pio.port, reset_pio.pin,
+			ispreq_pio.port, ispreq_pio.pin);
 
-	Uart uart(uart_port);
-	Pin reset(reset_port, reset_pin);
-	Pin ispreq(ispreq_port, ispreq_pin);
-	Pin led(led_port, led_pin);
+
+	Uart uart(uart_pio.port);
+	Pin reset(reset_pio.port, reset_pio.pin);
+	Pin ispreq(ispreq_pio.port, ispreq_pio.pin);
+
 	LpcIsp isp(uart, reset, ispreq);
 
 	printf("Init Phy\n");
-	if( isp.init_phy(uart_pinassign) < 0 ){
+	if( isp.init_phy(uart_pio.pin) < 0 ){
 		printf("Failed to init phy\n");
 		exit(1);
 	}
 
-	printf("Start programming\n");
-	ret = isp.program(image, 12000000, device, update_progress);
-	if( ret < 0 ){
-		printf("Failed to program chip %d\n", ret);
+	if( cli.is_option("-read") == false ){
+		printf("Start programming %s\n", image.c_str());
+		ret = isp.program(image, 12000000, device, update_progress);
+		if( ret < 0 ){
+			printf("Failed to program chip %d\n", ret);
+		}
+
+		printf("Programming Complete\n");
+		if( isp.exit_phy() < 0 ){
+			printf("Failed to exit phy\n");
+		}
+	} else {
+		printf("Read: %s from %s\n", image.c_str(), device.c_str());
+		isp.read(image.c_str(), 12000000, device.c_str(), 0, 0);
+		printf("Done\n");
+		exit(1);
 	}
 
-	printf("Programming Complete\n");
-	if( isp.exit_phy() < 0 ){
-		printf("Failed to exit phy\n");
-	}
+	reset.set_attr(Pin::INPUT | Pin::PULLUP);
+	ispreq.set_attr(Pin::INPUT | Pin::PULLUP);
 
 	return 0;
 }

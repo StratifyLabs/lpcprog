@@ -9,9 +9,10 @@
     "github": "https://github.com/StratifyLabs/lpcprog",
     "hardwareid": "",
     "name": "lpcprog",
+    "permissions": "public",
     "publisher": "Stratify Labs, Inc",
-    "ram": 8192,
+    "ram": 0,
     "tags": "utility",
     "type": "StratifyApp",
-    "version": "0.9"
+    "version": "1.3"
 }
