@@ -1,14 +1,31 @@
-/*! \file */ //Copyright 2011-2016 Tyler Gilbert; All Rights Reserved
+/*
+
+Copyright 2011-2017 Tyler Gilbert
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+ */
+
 
 #ifndef LPCPHY_HPP_
 #define LPCPHY_HPP_
 
-#include <stfy/hal.hpp>
-#include <stfy/sys.hpp>
+#include <sapi/hal.hpp>
+#include <sapi/sys.hpp>
 
 #define LPC_ISP_UNLOCK_CODE "23130"
 
-#define LPCPHY_RAM_BUFFER_SIZE 512
+#define LPCPHY_RAM_BUFFER_SIZE 1024
 
 class LpcPhy {
 public:
@@ -17,12 +34,11 @@ public:
 		m_ram_buffer = 0x40000200;
 		m_is_return_code_newline = false;
 		m_is_uuencode = false;
-		m_pinassign = 0;
 		m_max_speed = MAX_SPEED_115200;
 	}
 
 
-	int init(int pinassign);
+	int init(const UartPinAssignment & pin_assignment);
 	int exit();
 	int open(int crystal);
 	int close();
@@ -86,7 +102,7 @@ private:
 	hal::Pin & m_reset;
 	hal::Pin & m_ispreq;
 	u32 m_ram_buffer;
-	int m_pinassign;
+	UartPinAssignment m_pin_assignment;
 	bool m_is_return_code_newline;
 	bool m_is_uuencode;
 	u16 m_max_speed;

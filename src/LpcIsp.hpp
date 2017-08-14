@@ -1,11 +1,25 @@
-/*! \file */ //Copyright 2011-2016 Tyler Gilbert; All Rights Reserved
+/*
 
+Copyright 2011-2017 Tyler Gilbert
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+ */
 #ifndef LPCISP_HPP_
 #define LPCISP_HPP_
 
-#include <mcu/types.h>
-#include <stfy/hal.hpp>
-#include <stfy/sys.hpp>
+#include <sapi/hal.hpp>
+#include <sapi/sys.hpp>
 
 #include "LpcPhy.hpp"
 
@@ -21,7 +35,7 @@ public:
 	char ** getlist();
 
 	int copy_names(char * device, char * pio0, char * pio1);
-	int init_phy(int uart_pinassign){ return m_phy.init(uart_pinassign); }
+	int init_phy(const UartPinAssignment & pin_assignment){ return m_phy.init(pin_assignment); }
 	int exit_phy(){ return m_phy.exit(); }
 	int reset(){ return m_phy.reset(); }
 

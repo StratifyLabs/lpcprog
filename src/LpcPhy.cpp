@@ -1,11 +1,20 @@
-/*! \addtogroup LPC21
- * @{
- *
+/*
+
+Copyright 2011-2017 Tyler Gilbert
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
  */
-
-/*! \file */ //Copyright 2011-2016 Tyler Gilbert; All Rights Reserved
-
-#include <stfy/sys.hpp>
 
 #include "LpcPhy.hpp"
 
@@ -75,11 +84,11 @@ enum {
 //static const u32 sector_size1 = (32*1024);
 
 
-int LpcPhy::init(int pinassign){
+int LpcPhy::init(const UartPinAssignment & pin_assignment){
 	//Open UART
 	int ret;
 
-	m_pinassign = pinassign;
+	u32 o_flags = Uart::FLAG_IS_PARITY_NONE | Uart::FLAG_IS_STOP1;
 
 	if( m_uart.open(Uart::NONBLOCK | Uart::RDWR) < 0 ){
 		isplib_error("Failed to open UART\n");
@@ -88,7 +97,7 @@ int LpcPhy::init(int pinassign){
 		return -1;
 	}
 
-	if( (ret = m_uart.set_attr(9600, pinassign)) < 0 ){
+	if( (ret = m_uart.set_attr(o_flags, 9600, 8, pin_assignment)) < 0 ){
 		m_uart.close();
 
 		if( m_uart.open(Uart::NONBLOCK) <  0 ){
@@ -97,9 +106,9 @@ int LpcPhy::init(int pinassign){
 			m_trace.error();
 		}
 
-		if( (ret = m_uart.set_attr(9600, pinassign)) < 0 ){
+		if( (ret = m_uart.set_attr(o_flags, 9600, 8, pin_assignment)) < 0 ){
 			isplib_error("Failed to set_attr UART %d\n", ret);
-			sprintf(m_trace.cdata(), "Set UART Attr %d", ret);
+			m_trace.sprintf( "Set UART Attr %d", ret);
 			m_trace.error();
 			return -2;
 		}
@@ -112,10 +121,10 @@ int LpcPhy::init(int pinassign){
 		return -3;
 	} else {
 		m_reset.set();
-		m_reset.set_attr(Pin::OUTPUT);
+		m_reset.set_attr(Pin::FLAG_SET_OUTPUT);
 	}
 
-	if( m_ispreq.init(Pio::OUTPUT) < 0 ){
+	if( m_ispreq.init(Pin::FLAG_SET_OUTPUT) < 0 ){
 		isplib_error("Failed to init PIO ispreq\n");
 		m_trace.assign("Init PIO ispreq");
 		m_trace.error();
@@ -127,8 +136,8 @@ int LpcPhy::init(int pinassign){
 
 int LpcPhy::exit(){
 	m_uart.close();
-	m_reset.set_attr(Pin::INPUT);
-	m_ispreq.set_attr(Pin::INPUT);
+	m_reset.set_attr(Pin::FLAG_SET_INPUT);
+	m_ispreq.set_attr(Pin::FLAG_SET_INPUT);
 	m_reset.close();
 	m_ispreq.close();
 	return 0;
@@ -156,21 +165,19 @@ int LpcPhy::open(int crystal){
 		return -2;
 	}
 
-	attr.parity = Uart::NONE;
-	attr.stop = Uart::STOP1;
-	attr.start = 0;
-	attr.pin_assign = m_pinassign;
+	m_pin_assignment.copy(attr.pin_assignment);
+	attr.o_flags = Uart::FLAG_IS_PARITY_NONE | Uart::FLAG_IS_STOP1;
 	attr.width = 8;
 
 	for(i=m_max_speed; uart_speeds[i] != NULL; i++){
 
-		attr.baudrate = atoi(uart_speeds[i]);
-		sprintf(m_trace.cdata(),"Try Sync %ld", attr.baudrate);
+		attr.freq = atoi(uart_speeds[i]);
+		m_trace.sprintf("Try Sync %ld", attr.freq);
 		m_trace.message();
 
 		if ( m_uart.set_attr(attr) < 0 ){
 			isplib_error("Failed to set baud rate\n");
-			sprintf(m_trace.cdata(),"Set Baud rate %ld", attr.baudrate);
+			m_trace.sprintf("Set Baud rate %ld", attr.freq);
 			m_trace.error();
 			return -4;
 		}
@@ -196,7 +203,7 @@ int LpcPhy::open(int crystal){
 			err = this->flush();
 			if ( err < 0 ){
 				isplib_error("failed to clear the RX buffers (%d) (%d)\n", err, link_errno);
-				sprintf(m_trace.cdata(), "Flush failed %d", err);
+				m_trace.sprintf( "Flush failed %d", err);
 				m_trace.warning();
 				continue;
 			}
@@ -219,14 +226,14 @@ int LpcPhy::open(int crystal){
 				id = this->read_part_id();
 				if ( id ){
 					isplib_debug(DEBUG_LEVEL, "Part ID is %d\n", id);
-					sprintf(m_trace.cdata(), "ID:%d", id);
+					m_trace.sprintf( "ID:%d", id);
 					m_trace.message();
 				}
 
 				version = this->read_boot_version();
 				if( version ){
 					isplib_debug(DEBUG_LEVEL, "Bootloader Version is %d.%d\n", (version>>8)&0xFF, version&0xFF);
-					sprintf(m_trace.cdata(), "Boot version:%d", version);
+					m_trace.sprintf( "Boot version:%d", version);
 					m_trace.message();
 				}
 
@@ -304,7 +311,7 @@ int LpcPhy::write_memory(u32 loc, const void * buf, int nbyte, u32 sector){
 		} while( retry < 3 );
 
 		if( retry == 3 ){
-			printf("Failed to write RAM\n");
+			printf("Failed to write RAM 0x%lX\n", m_ram_buffer);
 			snprintf(m_trace.cdata(), m_trace.capacity(), "Failed to write RAM");
 			m_trace.error();
 			return 0;
@@ -370,32 +377,33 @@ int LpcPhy::write_memory(u32 loc, const void * buf, int nbyte, u32 sector){
 			return 0;
 		}
 
-		//if ( sector ){ //First sector is mapped to the bootloader and won't compare properly
+		if ( sector ){ //First sector is mapped to the bootloader and won't compare properly
 
-		//Now compare the ram to the flash to see if the operation was successful
-		retry = 0;
-		do {
-			if ( this->compare_memory(m_ram_buffer, loc, LPCPHY_RAM_BUFFER_SIZE) ){
-				retry++;
-				Timer::wait_msec(100);
-			} else {
-				break;
+			//Now compare the ram to the flash to see if the operation was successful
+			retry = 0;
+			do {
+				if ( this->compare_memory(m_ram_buffer, loc, LPCPHY_RAM_BUFFER_SIZE) ){
+					retry++;
+					Timer::wait_msec(100);
+				} else {
+					break;
+				}
+
+			} while( retry < 3 );
+
+			if( retry == 3 ){
+				printf("Write to compare memory\n");
+				snprintf(m_trace.cdata(), m_trace.capacity(), "Failed to compare\n");
+				m_trace.error();
+				//isplib_debug(4, "Dumping RAM\n");
+				//debug_dump_mem(4, page_buffer, LPCPHY_RAM_BUFFER_SIZE);
+				//this->read_flash(page_buffer, addr, LPCPHY_RAM_BUFFER_SIZE);
+				//isplib_debug(4, "Dumping FLASH\n");
+				//debug_dump_mem(4, page_buffer, LPCPHY_RAM_BUFFER_SIZE);
+				return 0;
 			}
 
-		} while( retry < 3 );
-
-		if( retry == 3 ){
-			printf("Write to compare memory\n");
-			snprintf(m_trace.cdata(), m_trace.capacity(), "Failed to compare\n");
-			m_trace.error();
-			//isplib_debug(4, "Dumping RAM\n");
-			//debug_dump_mem(4, page_buffer, LPCPHY_RAM_BUFFER_SIZE);
-			//this->read_flash(page_buffer, addr, LPCPHY_RAM_BUFFER_SIZE);
-			//isplib_debug(4, "Dumping FLASH\n");
-			//debug_dump_mem(4, page_buffer, LPCPHY_RAM_BUFFER_SIZE);
-			return 0;
 		}
-		//}
 
 
 		loc += page_size;
@@ -450,7 +458,7 @@ int LpcPhy::reset(){
 	Timer::wait_msec(50);
 
 	//Hold the reset line low
-	if ( m_reset.clr() ){
+	if ( m_reset.clear() ){
 		isplib_error("failed to clear RESET\n");
 		return -1;
 	}
@@ -482,7 +490,7 @@ int LpcPhy::start_bootloader(){
 	}
 	isplib_debug(DEBUG_LEVEL+1, "RST is high\n");
 
-	if ( m_ispreq.clr() < 0 ){
+	if ( m_ispreq.clear() < 0 ){
 		isplib_error("failed to clear ispreq\n");
 		return -1;
 	}
@@ -490,7 +498,7 @@ int LpcPhy::start_bootloader(){
 	Timer::wait_msec(150);
 
 
-	if ( m_reset.clr() < 0 ){
+	if ( m_reset.clear() < 0 ){
 		isplib_error("failed to clear reset\n");
 		return -1;
 	}
@@ -619,7 +627,7 @@ int LpcPhy::sync_bootloader(u32 crystal /*! Crystal frequency in KHz */){
 				return -1;
 			}
 
-			sprintf(m_trace.cdata(), "Crystal OK");
+			m_trace.sprintf( "Crystal OK");
 			m_trace.message();
 
 		} else {
@@ -648,7 +656,7 @@ int LpcPhy::sync_bootloader(u32 crystal /*! Crystal frequency in KHz */){
 			}
 
 			Timer::wait_msec(10);
-			sprintf(m_trace.cdata(), "Crystal OK");
+			m_trace.sprintf( "Crystal OK");
 			m_trace.message();
 		}
 	}
@@ -1344,7 +1352,4 @@ int LpcPhy::send_command(const char * cmd, int timeout, int wait_ms){
 	return ret;
 }
 
-
-
-/*! @} */
 
