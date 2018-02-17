@@ -1,9 +1,4 @@
 {
-    "LocalBuild": "build_release_armv7m",
-    "LocalInstallPath": "/app/.install",
-    "LocalIsRam": false,
-    "LocalIsStartup": false,
-    "LocalProjectId": "-KYds7ufk3y4jZe2lnKS",
     "buildprefix": "build_",
     "description": "lpcprog uses a UART port and two IO pins to program a flash image on various LPC devices. This utility can be used to flash the Stratify OS bootloader.",
     "github": "https://github.com/StratifyLabs/lpcprog",

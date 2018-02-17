@@ -32,7 +32,7 @@ typedef struct {
 } lpc_device_t;
 
 
-#define TOTAL_DEVICES 4
+#define TOTAL_DEVICES 5
 
 static lpc_device_t devices[] = {
 		{
@@ -95,6 +95,45 @@ static lpc_device_t devices[] = {
 
 		{
 				.prefix = "lpc17",
+				.checksum_addr = 0x1C,
+				.ram_start = 0x10000300,
+				.sectors = 30,
+				.sector_table[0] = 4096,
+				.sector_table[1] = 4096,
+				.sector_table[2] = 4096,
+				.sector_table[3] = 4096,
+				.sector_table[4] = 4096,
+				.sector_table[5] = 4096,
+				.sector_table[6] = 4096,
+				.sector_table[7] = 4096,
+				.sector_table[8] = 4096,
+				.sector_table[9] = 4096,
+				.sector_table[10] = 4096,
+				.sector_table[11] = 4096,
+				.sector_table[12] = 4096,
+				.sector_table[13] = 4096,
+				.sector_table[14] = 4096,
+				.sector_table[15] = 4096,
+				.sector_table[16] = 32768,
+				.sector_table[17] = 32768,
+				.sector_table[18] = 32768,
+				.sector_table[19] = 32768,
+				.sector_table[20] = 32768,
+				.sector_table[21] = 32768,
+				.sector_table[22] = 32768,
+				.sector_table[23] = 32768,
+				.sector_table[24] = 32768,
+				.sector_table[25] = 32768,
+				.sector_table[26] = 32768,
+				.sector_table[27] = 32768,
+				.sector_table[28] = 32768,
+				.sector_table[29] = 32768,
+				.sector_table[30] = 32768,
+				.sector_table[31] = 32768
+		},
+
+		{
+				.prefix = "lpc40",
 				.checksum_addr = 0x1C,
 				.ram_start = 0x10000300,
 				.sectors = 30,

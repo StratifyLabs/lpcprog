@@ -93,7 +93,7 @@ int LpcPhy::init(const UartPinAssignment & pin_assignment){
 	if( m_uart.open(Uart::NONBLOCK | Uart::RDWR) < 0 ){
 		isplib_error("Failed to open UART\n");
 		m_trace.assign("Open UART");
-		m_trace.error();
+		m_trace.trace_error();
 		return -1;
 	}
 
@@ -103,13 +103,13 @@ int LpcPhy::init(const UartPinAssignment & pin_assignment){
 		if( m_uart.open(Uart::NONBLOCK) <  0 ){
 			isplib_error("Failed to open UART (second try)\n");
 			m_trace.assign("Open UART (2nd Try)");
-			m_trace.error();
+			m_trace.trace_error();
 		}
 
 		if( (ret = m_uart.set_attr(o_flags, 9600, 8, pin_assignment)) < 0 ){
 			isplib_error("Failed to set_attr UART %d\n", ret);
 			m_trace.sprintf( "Set UART Attr %d", ret);
-			m_trace.error();
+			m_trace.trace_error();
 			return -2;
 		}
 	}
@@ -117,7 +117,7 @@ int LpcPhy::init(const UartPinAssignment & pin_assignment){
 	if( m_reset.open() <  0 ){
 		isplib_error("Failed to init PIO reset %d\n", link_errno);
 		m_trace.assign("Init PIO reset");
-		m_trace.error();
+		m_trace.trace_error();
 		return -3;
 	} else {
 		m_reset.set();
@@ -127,7 +127,7 @@ int LpcPhy::init(const UartPinAssignment & pin_assignment){
 	if( m_ispreq.init(Pin::FLAG_SET_OUTPUT) < 0 ){
 		isplib_error("Failed to init PIO ispreq\n");
 		m_trace.assign("Init PIO ispreq");
-		m_trace.error();
+		m_trace.trace_error();
 		return -4;
 	}
 
@@ -154,14 +154,14 @@ int LpcPhy::open(int crystal){
 	if ( m_reset.set() < 0 ){
 		isplib_error("Failed to set reset\n");
 		m_trace.assign("Set Reset");
-		m_trace.error();
+		m_trace.trace_error();
 		return -1;
 	}
 
 	if ( m_ispreq.set() < 0 ){
 		isplib_error("Failed to set ispreq\n");
 		m_trace.assign("Set ISPREQ");
-		m_trace.error();
+		m_trace.trace_error();
 		return -2;
 	}
 
@@ -173,12 +173,12 @@ int LpcPhy::open(int crystal){
 
 		attr.freq = atoi(uart_speeds[i]);
 		m_trace.sprintf("Try Sync %ld", attr.freq);
-		m_trace.message();
+		m_trace.trace_message();
 
 		if ( m_uart.set_attr(attr) < 0 ){
 			isplib_error("Failed to set baud rate\n");
 			m_trace.sprintf("Set Baud rate %ld", attr.freq);
-			m_trace.error();
+			m_trace.trace_error();
 			return -4;
 		}
 
@@ -192,19 +192,19 @@ int LpcPhy::open(int crystal){
 			if ( this->start_bootloader() < 0 ){
 				isplib_error("failed to start bootloader\n");
 				m_trace.assign("Didn't start bootloader");
-				m_trace.warning();
+				m_trace.trace_warning();
 				continue;
 			}
 
 			m_trace.assign("Started bootloader");
-			m_trace.message();
+			m_trace.trace_message();
 
 			//Clear the UART receive buffer
 			err = this->flush();
 			if ( err < 0 ){
 				isplib_error("failed to clear the RX buffers (%d) (%d)\n", err, link_errno);
 				m_trace.sprintf( "Flush failed %d", err);
-				m_trace.warning();
+				m_trace.trace_warning();
 				continue;
 			}
 
@@ -214,12 +214,12 @@ int LpcPhy::open(int crystal){
 				if ( this->unlock("23130") ){
 					isplib_error("failed to Unlock\n");
 					m_trace.assign("Unlock Failed");
-					m_trace.warning();
+					m_trace.trace_warning();
 					continue;
 				}
 
 				m_trace.assign("unlocked");
-				m_trace.message();
+				m_trace.trace_message();
 
 				id = this->read_part_id();
 				//The first command after unlock seems to fail so this is called twice
@@ -227,28 +227,28 @@ int LpcPhy::open(int crystal){
 				if ( id ){
 					isplib_debug(DEBUG_LEVEL, "Part ID is %d\n", id);
 					m_trace.sprintf( "ID:%d", id);
-					m_trace.message();
+					m_trace.trace_message();
 				}
 
 				version = this->read_boot_version();
 				if( version ){
 					isplib_debug(DEBUG_LEVEL, "Bootloader Version is %d.%d\n", (version>>8)&0xFF, version&0xFF);
 					m_trace.sprintf( "Boot version:%d", version);
-					m_trace.message();
+					m_trace.trace_message();
 				}
 
 
 				return 0;
 			} else {
 				m_trace.assign("Synchronize Failed");
-				m_trace.warning();
+				m_trace.trace_warning();
 			}
 		}
 	}
 
 	isplib_error("failed to sync speeds\n");
 	m_trace.assign("Failed to sync");
-	m_trace.error();
+	m_trace.trace_error();
 	return -8;
 
 }
@@ -313,7 +313,7 @@ int LpcPhy::write_memory(u32 loc, const void * buf, int nbyte, u32 sector){
 		if( retry == 3 ){
 			printf("Failed to write RAM 0x%lX\n", m_ram_buffer);
 			snprintf(m_trace.cdata(), m_trace.capacity(), "Failed to write RAM");
-			m_trace.error();
+			m_trace.trace_error();
 			return 0;
 		}
 
@@ -332,7 +332,7 @@ int LpcPhy::write_memory(u32 loc, const void * buf, int nbyte, u32 sector){
 		if( retry == 3 ){
 			printf("Failed to prepare sector (%d)", err);
 			snprintf(m_trace.cdata(), m_trace.capacity(), "Failed to prepare %d", err);
-			m_trace.error();
+			m_trace.trace_error();
 			return 0;
 		}
 
@@ -351,7 +351,7 @@ int LpcPhy::write_memory(u32 loc, const void * buf, int nbyte, u32 sector){
 		if( retry == 3 ){
 			printf("Failed to copy RAM to flash\n");
 			snprintf(m_trace.cdata(), m_trace.capacity(), "Failed to copy %d", LPCPHY_RAM_BUFFER_SIZE);
-			m_trace.error();
+			m_trace.trace_error();
 			return 0;
 		}
 
@@ -373,7 +373,7 @@ int LpcPhy::write_memory(u32 loc, const void * buf, int nbyte, u32 sector){
 		if( retry == 3 ){
 			printf("Failed to write RAM second time\n");
 			snprintf(m_trace.cdata(), m_trace.capacity(), "Failed to re-write %d", LPCPHY_RAM_BUFFER_SIZE);
-			m_trace.error();
+			m_trace.trace_error();
 			return 0;
 		}
 
@@ -394,7 +394,7 @@ int LpcPhy::write_memory(u32 loc, const void * buf, int nbyte, u32 sector){
 			if( retry == 3 ){
 				printf("Write to compare memory\n");
 				snprintf(m_trace.cdata(), m_trace.capacity(), "Failed to compare\n");
-				m_trace.error();
+				m_trace.trace_error();
 				//isplib_debug(4, "Dumping RAM\n");
 				//debug_dump_mem(4, page_buffer, LPCPHY_RAM_BUFFER_SIZE);
 				//this->read_flash(page_buffer, addr, LPCPHY_RAM_BUFFER_SIZE);
@@ -410,8 +410,8 @@ int LpcPhy::write_memory(u32 loc, const void * buf, int nbyte, u32 sector){
 		bytes_written += page_size;
 	} while ( (int)bytes_written < nbyte );
 
-	snprintf(m_trace.cdata(), m_trace.capacity(), "Wrote %ld bytes", bytes_written);
-	m_trace.message();
+	m_trace.sprintf("Wrote %ld bytes", bytes_written);
+	m_trace.trace_message();
 
 	return bytes_written;
 
@@ -550,7 +550,7 @@ int LpcPhy::sync_bootloader(u32 crystal /*! Crystal frequency in KHz */){
 	if ( bytes != strlen(buf) ){
 		isplib_error("failed to write ? (%d, %d)\n", bytes, link_errno);
 		m_trace.assign("Write ?");
-		m_trace.error();
+		m_trace.trace_error();
 		return -1;
 	}
 
@@ -559,12 +559,12 @@ int LpcPhy::sync_bootloader(u32 crystal /*! Crystal frequency in KHz */){
 	if( wait_response("Synchronized\r\n", QUICK_TIMEOUT) ){
 		isplib_error("failed to wait for synchronized\n");
 		m_trace.assign("Wait Synchronized");
-		m_trace.error();
+		m_trace.trace_error();
 		return -1;
 	}
 
 	m_trace.assign("Synchronize done");
-	m_trace.message();
+	m_trace.trace_message();
 
 	//send "Synchronized<CR><LF>"
 	isplib_debug(DEBUG_LEVEL+1, "Sending 'Synchronized'\n");
@@ -573,7 +573,7 @@ int LpcPhy::sync_bootloader(u32 crystal /*! Crystal frequency in KHz */){
 	if ( bytes != strlen(buf) ){
 		isplib_error("failed to write synchronized\n");
 		m_trace.assign("Send Synchronized");
-		m_trace.error();
+		m_trace.trace_error();
 		return -1;
 	}
 
@@ -582,18 +582,18 @@ int LpcPhy::sync_bootloader(u32 crystal /*! Crystal frequency in KHz */){
 	if( wait_response("Synchronized\r", QUICK_TIMEOUT) ){
 		isplib_error("failed to wait for synchronizeed (2nd time)\n");
 		m_trace.assign("Wait Sync OK");
-		m_trace.error();
+		m_trace.trace_error();
 		return -1;
 	}
 
 	m_trace.assign("Sync OK");
-	m_trace.message();
+	m_trace.trace_message();
 
 	if( m_uart.read(&c,1) ){
 		if( c == '\n' ){
 			Timer::wait_msec(10);
 			m_trace.assign("Set return code newline");
-			m_trace.message();
+			m_trace.trace_message();
 			set_return_code_newline(true);
 			if( wait_response("OK\r\n", QUICK_TIMEOUT) ){
 				isplib_error("failed to get OK for lpc177x_8x\n");
@@ -628,11 +628,11 @@ int LpcPhy::sync_bootloader(u32 crystal /*! Crystal frequency in KHz */){
 			}
 
 			m_trace.sprintf( "Crystal OK");
-			m_trace.message();
+			m_trace.trace_message();
 
 		} else {
 			m_trace.assign("Clear return code newline");
-			m_trace.message();
+			m_trace.trace_message();
 			set_return_code_newline(false);
 			if( wait_response("K\r\n", QUICK_TIMEOUT) ){
 				isplib_error("failed to get OK on lpc17xx\n");
@@ -657,7 +657,7 @@ int LpcPhy::sync_bootloader(u32 crystal /*! Crystal frequency in KHz */){
 
 			Timer::wait_msec(10);
 			m_trace.sprintf( "Crystal OK");
-			m_trace.message();
+			m_trace.trace_message();
 		}
 	}
 
@@ -1269,7 +1269,7 @@ int LpcPhy::get_line(void * buf, int nbyte, int max_wait){
 #if !defined __link
 			if( errno != EAGAIN ){
 				m_trace.assign("uart read failed");
-				m_trace.error();
+				m_trace.trace_error();
 				return -1;
 			}
 #else

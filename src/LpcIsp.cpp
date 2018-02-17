@@ -16,6 +16,7 @@ limitations under the License.
 
  */
 
+#include <stdarg.h>
 #include <unistd.h>
 #include <stdlib.h>
 
@@ -29,7 +30,6 @@ limitations under the License.
 #ifndef DEBUG_LEVEL
 #define DEBUG_LEVEL 2
 #endif
-
 
 static const char * device_list[] = {
 		"lpc1342",
@@ -45,6 +45,7 @@ static const char * device_list[] = {
 		"lpc1767",
 		"lpc1768",
 		"lpc1769",
+		"lpc4078",
 		NULL
 };
 
@@ -57,9 +58,9 @@ int LpcIsp::copy_names(char * device, char * pio0, char * pio1){
 }
 
 
-int LpcIsp::program(const char * filename, int crystal, const char * dev, bool (*progress)(void*,int,int), void * context){
+int LpcIsp::program(const char * filename, int crystal, const char * dev){
 	int ret;
-	FILE * f;
+	File f;
 	u8 image_buffer[LPCPHY_RAM_BUFFER_SIZE];
 	int image_page_size = LPCPHY_RAM_BUFFER_SIZE;
 	u32 size;
@@ -73,114 +74,113 @@ int LpcIsp::program(const char * filename, int crystal, const char * dev, bool (
 	if( strncmp(dev, "lpc8", 4) == 0 ){
 		m_phy.set_max_speed(LpcPhy::MAX_SPEED_9600);
 		m_phy.set_uuencode(false);
-
 		m_trace.assign("Program LPC8 mode");
-		m_trace.message();
+		m_trace.trace_message();
 	} else {
 		m_phy.set_uuencode(true);
 	}
 
 	sys::Timer::wait_msec(10);
 
+	status_printf("Device %s\n", dev);
+	status_printf("Image %s\n", filename);
+
+	status_printf("Init programming interface");
 	if ( (ret = init_prog_interface(crystal)) < 0 ){
 		m_trace.assign("Start interface");
-		m_trace.error();
-		isplib_error("Failed to start interface\n");
+		m_trace.trace_error();
+		isplib_error("Failed to start interface");
 		return ret;
 	}
 
+	status_printf("Erase device");
 	sys::Timer::wait_msec(10);
 	if ( erase_dev() ){
 		m_trace.assign("Erase device");
-		m_trace.error();
-		isplib_error("Failed to erase device\n");
+		m_trace.trace_error();
+		isplib_error("Failed to erase device");
 		return -1;
 	}
 
+	status_printf("Open binary file");
 	sys::Timer::wait_msec(10);
-	f = fopen(filename, "rb");
-	if ( f != NULL ){
-		fseek(f, 0, SEEK_END); // seek to end of file
-		size = ftell(f); // get current file pointer
-		fclose(f); //close the file
-
-		sys::Timer::wait_msec(10);
-		sprintf(m_trace.cdata(), "Image size:%d", (int)size);
-		m_trace.message();
-	} else {
+	if( f.open(filename, File::READONLY) < 0 ){
 		m_trace.assign("Didn't open file");
-		m_trace.error();
-		isplib_error("Could not open file %s\n", filename);
+		m_trace.trace_error();
+		isplib_error("Could not open file %s", filename);
 		return -1;
 	}
+
+
+	size = f.size();
+	sys::Timer::wait_msec(10);
+	m_trace.sprintf("Image size:%d", (int)size);
+	m_trace.trace_message();
+
 
 	if (!size){
-		isplib_error("Error:  Binary File Error\n");
+		isplib_error("Error:  Binary File Error");
 		m_trace.assign("Size error");
-		m_trace.error();
+		m_trace.trace_error();
 		return -2;
 	}
 
-	isplib_debug(DEBUG_LEVEL, "File size is %d\n", (int)size);
+	isplib_debug(DEBUG_LEVEL, "File size is %d", (int)size);
 	memset(image_buffer, 0xFF, image_page_size);
 
 	if( image_page_size > (int)size ){
 		image_page_size = size;
 	}
 
-	f = fopen(filename, "rb");
+	f.seek(0, File::SET);
 
-	if ( f != NULL ){
-		if ( (int)(bytes_read = fread(image_buffer, 1, image_page_size, f)) != image_page_size ){
-			m_trace.assign("Failed to read file");
-			m_trace.error();
-			isplib_error("Could not read file %s (%d of %d bytes read)\n", filename, bytes_read, size);
-			fclose(f);
-			return -1;
-		}
-	} else {
-		m_trace.assign("Failed to open file");
-		m_trace.error();
-		isplib_error("Could not open file %s to read image\n", filename);
-		fclose(f);
+
+	if ( (int)(bytes_read = f.read(image_buffer, image_page_size)) != image_page_size ){
+		m_trace.assign("Failed to read file");
+		m_trace.trace_error();
+		isplib_error("Could not read file %s (%d of %d bytes read)", filename, bytes_read, size);
+		f.close();
 		return -1;
 	}
 
+
 	start_address = 0;
 
-	isplib_debug(DEBUG_LEVEL, "Starting address is %d\n", start_address);
+	isplib_debug(DEBUG_LEVEL, "Starting address is %d", start_address);
 
+	status_printf("Write vector checksum");
 	//Write the patch to the vector checksum
 	if ( write_vector_checksum(image_buffer, dev) ) {
 		sys::Timer::wait_msec(10);
 		m_trace.assign("failed to set checksum");
-		m_trace.error();
-		isplib_error("Device %s is not supported\n", dev);
-		fclose(f);
+		m_trace.trace_error();
+		isplib_error("Device %s is not supported", dev);
+		printf("Device is not supported");
+		f.close();
 		return -1;
 	}
 
 	m_phy.set_ram_buffer( lpc_device_get_ram_start(dev) );
 	snprintf(m_trace.cdata(), m_trace.capacity(), "RAM Start 0x%lX", m_phy.ram_buffer());
-	m_trace.message();
+	m_trace.trace_message();
 
 	//Write the program memory
 	failed = 0;
 	bytes_written = 0;
+	status_printf("Programming %d bytes at 0x%lX", size, start_address);
 	do {
 
 		if( bytes_written > 0 ){
-			bytes_read = fread(image_buffer, 1, image_page_size, f);
+			bytes_read = f.read(image_buffer, image_page_size);
 		}
 
 		if( bytes_read > 0 ){
-
 			if ( !write_progmem(image_buffer, start_address + bytes_written, bytes_read, 0, 0) ){
 				m_trace.assign("failed to write image");
-				m_trace.error();
+				m_trace.trace_error();
 				failed = 1;
-				isplib_error("Failed to write program memory\n");
-				fclose(f);
+				status_printf("Failed to write program memory");
+				f.close();
 				return -1;
 			}
 
@@ -189,23 +189,22 @@ int LpcIsp::program(const char * filename, int crystal, const char * dev, bool (
 			break;
 		}
 
-		if ( progress ){
-			if ( progress(context, bytes_written, size) ){
-				m_trace.assign("Aborted");
-				m_trace.warning();
-				return 0; //abort requested
-			}
+		if ( update_progress(bytes_written, size) ){
+			m_trace.assign("Aborted");
+			m_trace.trace_warning();
+			return 0; //abort requested
 		}
+
 
 	} while( bytes_written < size );
 	prog_shutdown();
 
-	fclose(f);
+	f.close();
 
 	if ( !failed && (bytes_written == size) ){
-		isplib_debug(DEBUG_LEVEL, "Device Successfully Programmed\n");
+		status_printf("Device Successfully Programmed");
 	} else {
-		isplib_error("Device Failed to program correctly\n");
+		status_printf("Device Failed to program correctly");
 		return -1;
 	}
 
@@ -214,9 +213,9 @@ int LpcIsp::program(const char * filename, int crystal, const char * dev, bool (
 
 }
 
-int LpcIsp::read(const char * filename, int crystal, const char * dev, bool (*progress)(void*,int,int), void * context){
+int LpcIsp::read(const char * filename, int crystal, const char * dev){
 
-	FILE * f;
+	File f;
 	int bytes_read;
 	int bytes_total;
 	char data[LPCPHY_RAM_BUFFER_SIZE];
@@ -227,34 +226,33 @@ int LpcIsp::read(const char * filename, int crystal, const char * dev, bool (*pr
 		m_phy.set_max_speed(LpcPhy::MAX_SPEED_38400);
 		m_phy.set_uuencode(false);
 
-		printf("LPC8xx mode\n");
+		printf("LPC8xx mode");
 		m_trace.assign("Read LPC8 mode");
-		m_trace.message();
+		m_trace.trace_message();
 	} else {
 		m_phy.set_max_speed(LpcPhy::MAX_SPEED_38400);
 		m_phy.set_uuencode(true);
 	}
 
-	printf("device is %s\n", m_device);
+	printf("device is %s", m_device);
 
 	if ( init_prog_interface(crystal) ){
-		printf("Failed to init prog interface\n");
+		status_printf("Failed to init prog interface");
 		return -1;
 	}
 
-	f = fopen(filename, "w");
-	if (!f){
-		printf("Could not create file %s\n", filename);
+	if( f.create(filename) < 0 ){
+		status_printf("Could not create file %s", filename);
 		return -2;
 	}
 
 	bytes_total = 0;
 	memset(data, 0x00, LPCPHY_RAM_BUFFER_SIZE);
 	while( (bytes_read = m_phy.read_memory(bytes_total, data, LPCPHY_RAM_BUFFER_SIZE)) > 0 ){
-		printf("Read %d bytes\n", bytes_read);
-		if ( fwrite(data, 1, bytes_read, f) != (u32)bytes_read ){
-			fclose(f);
-			printf("Failed to write data to file\n");
+		printf("Read %d bytes", bytes_read);
+		if ( f.write(data, bytes_read) != bytes_read ){
+			f.close();
+			printf("Failed to write data to file");
 			return -1;
 		}
 		bytes_total += bytes_read;
@@ -265,7 +263,7 @@ int LpcIsp::read(const char * filename, int crystal, const char * dev, bool (*pr
 
 	}
 
-	fclose(f);
+	f.close();
 
 	return 0;
 }
@@ -274,12 +272,6 @@ char ** LpcIsp::getlist(){
 	return (char**)device_list;
 }
 
-
-/*! \brief initializes the UART interface and starts the bootloader.
- * \details This function initializes the UART interface and starts the bootloader
- * at the specified speed.  If speed is < 0, an algorithm is used to detect the maximum
- * speed.
- */
 
 int LpcIsp::init_prog_interface(int crystal){
 	int ret;
@@ -293,12 +285,6 @@ int LpcIsp::init_prog_interface(int crystal){
 }
 
 
-
-/*! \brief reads the program memory over the specified range.
- * \details .
- *
- * \return Number of bytes read
- */
 u32 LpcIsp::read_progmem(void * data, u32 addr, u32 size, bool (*progress)(void*,int, int), void * context){
 	u32 buffer_size;
 	u32 bytes_read;
@@ -316,7 +302,7 @@ u32 LpcIsp::read_progmem(void * data, u32 addr, u32 size, bool (*progress)(void*
 		}
 
 		if ( m_phy.read_memory(addr + bytes_read, &((char*)data)[bytes_read], page_size) != page_size ){
-			printf("Error reading data at address 0x%04lX\n", (u32)(addr + bytes_read));
+			status_printf("Error reading data at address 0x%04lX", (u32)(addr + bytes_read));
 			return -1;
 		}
 
@@ -358,14 +344,14 @@ u32 LpcIsp::write_progmem(void * data, u32 addr, u32 size, bool (*progress)(void
 		}
 
 		if ( j < page_size ){ //only write if data has non 0xFF values
-			isplib_debug(DEBUG_LEVEL+1, "lpc_wr_pgmmem():Writing page starting at %d\n", addr + bytes_written);
+			isplib_debug(DEBUG_LEVEL+1, "lpc_wr_pgmmem():Writing page starting at %d", addr + bytes_written);
 			sector = lpc_device_get_sector_number(m_device, addr+bytes_written);
 			if ( m_phy.write_memory(addr + bytes_written,
 					&((char*)data)[bytes_written], page_size,
 					sector ) != page_size ){
-				printf("failed writing data at address 0x%04lX\n", (u32)(addr + bytes_written));
-				sprintf(m_trace.cdata(), "failed to write 0x%04lX", (u32)(addr + bytes_written));
-				m_trace.error();
+				printf("failed writing data at address 0x%04lX", (u32)(addr + bytes_written));
+				m_trace.sprintf("failed to write 0x%04lX", (u32)(addr + bytes_written));
+				m_trace.trace_error();
 				return 0;
 			}
 		}
@@ -390,17 +376,17 @@ int LpcIsp::erase_dev(){
 		}
 	} while ( !ret );
 
-	printf("Erase %d sectors\n", sectors);
+	status_printf("Erase %d sectors", sectors);
 	//Now erase all the sectors
 	ret = m_phy.erase_sector(0, --sectors);
 	if ( ret != 0 ){
-		isplib_error("Failed to erase device\n");
+		isplib_error("Failed to erase device");
 		return -1;
 	}
 
 	ret = m_phy.blank_check_sector(1, sectors);
 	if ( ret < 0 ){
-		isplib_error("Device not blank\n");
+		isplib_error("Device not blank");
 		return ret;
 	}
 
@@ -417,9 +403,8 @@ int LpcIsp::write_vector_checksum(unsigned char * hex_buffer, const char * dev){
 	addr = lpc_device_get_checksum_addr(dev);
 
 	if ( addr < 0 ){
-		m_trace.assign("Device not supported");
-		m_trace.error();
-		isplib_error("Device %s not supported\n", dev);
+		m_trace.trace_error();
+		status_printf("Device %s not supported", dev);
 		return -1;
 	}
 
@@ -432,34 +417,46 @@ int LpcIsp::write_vector_checksum(unsigned char * hex_buffer, const char * dev){
 
 	hex32[addr/4] = check;
 
-	printf("Position %lX patched: checksum = 0x%08lX\n", addr, check);
+	status_printf("Position %lX patched: checksum = 0x%08lX", addr, check);
 	return 0;
 }
 
-
-/*! \brief starts the user code and closes the UART.
- * \details This function starts the user code and then
- * closes the UART connection.
- * \return Zero on success
- */
 int LpcIsp::prog_shutdown(){
 	int err;
-	isplib_debug(DEBUG_LEVEL, "Restarting the device\n");
+	isplib_debug(DEBUG_LEVEL, "Restarting the device");
 
 	err = m_phy.reset();
 	if ( err ){
-		isplib_error("Could not reset device (%d)\n", err);
+		isplib_error("Could not reset device (%d)", err);
 		return -1;
 	}
 
 	err = m_phy.close();
 	if ( err ){
-		isplib_error("Failed to close ISP interface (%d)\n", err);
+		isplib_error("Failed to close ISP interface (%d)", err);
 		return -1;
 	}
 
 	return 0;
 }
 
-/*! @} */
+bool LpcIsp::update_progress(int progress, int max){
+
+	if( m_progress_callback ){
+		return m_progress_callback(m_context, progress, max);
+	}
+	return false;
+}
+
+bool LpcIsp::status_printf(const char * format, ...){
+	if( m_status_callback ){
+		char buffer[256];
+		buffer[255] = 0;
+		va_list args;
+		va_start (args, format);
+		vsnprintf(buffer, 255, format, args);
+		return m_status_callback(m_context, buffer);
+	}
+	return false;
+}
 
